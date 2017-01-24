@@ -55,6 +55,7 @@ ARCHITECTURE mc_arch OF mc IS
 				itemIdBUS:	IN std_logic_vector(15 downto 0); 
 				valuesBUS: 	IN std_logic_vector (31 downto 0); -- N/M model
 				neuronOut: 	OUT std_logic -- N/M model
+				neuronValue:OUT std_logic_vector (31 downto 0); -- N/M model
 			);
 	end component MM;
 	component resetTrig
@@ -66,11 +67,12 @@ ARCHITECTURE mc_arch OF mc IS
 				);		
 	end component resetTrig;
 	signal instruction 		: std_logic_vector(7 downto 0) := (others => '0');
-	signal byteCount			: natural;
+	signal byteCount			: natural range 0 to 3;
 	
 	signal writeOp				: std_logic_vector(ITEMID_SIZE+31 downto 0) := (others => '0');
 	signal readOp				: std_logic_vector(ITEMID_SIZE-1 downto 0) := (others => '0');
 	signal spikeTrain			: std_logic_vector(31 downto 0) := (others => '0');
+	signal spkCounter			: natural := 0;
 	signal netTopology		: std_logic_vector(MAX_NEURONS-1 downto 0) := (others => '0');
 
 	signal restoreState_aux	: std_logic :='0';
@@ -107,6 +109,7 @@ ARCHITECTURE mc_arch OF mc IS
 	signal itemIdBUS:		std_logic_vector(15 downto 0); 
 	signal valuesBUS: 	std_logic_vector (31 downto 0); -- N/M model
 	signal neuronOut: 	std_logic_vector(NUM_MODELS-1 downto 0); -- N/M model
+	signal neuronValue:	std_logic_vector (31 downto 0);
 
 	
 	-- reset trigger
@@ -142,6 +145,7 @@ BEGIN
 			itemIdBUS=>itemIdBUS,
 			valuesBUS=>valuesBUS,
 			neuronOut=>neuronOut(I),
+			neuronValue=>neuronValue(I)
 		);
 	end generate;
 
@@ -266,6 +270,7 @@ spiController: process(clk, reset)
 			spikeTrain<=(others =>'0');
 			netTopology<=(others =>'0');
 			byteCount<=0;
+			spkCounter<=1;-- MSB -- > LSB - 9x 32bits + 1x 16bits
 		else
 			
 			if spiInReady='1' and count=0 then
@@ -277,14 +282,15 @@ spiController: process(clk, reset)
 					byteCount<=0;
 				elsif spiIn=x"01" then -- confNetTopology
 					instruction(1)<='1';
-					payload<=37;
+					payload<=39;
 					payload_flag<='0';
 					byteCount<=0;
 				elsif spiIn=x"02" then -- runStep
 					instruction(2)<='1';
-					payload<=37;
+					payload<=39;
 					payload_flag<='0';
 					byteCount<=0;
+					spkCounter<=1; -- MSB -- > LSB - 9x 32bits + 1x 16bits
 				elsif spiIn=x"03" then -- write
 					instruction(3)<='1';
 					payload<=5;
@@ -311,25 +317,40 @@ spiController: process(clk, reset)
 				end if;
 				if byteCount=0 then
 					neuronBUS(15 downto 8)<=spiIn;
-				elsi
-					
-				if instruction(2)='1' then -- runStep
-					spikeTrain<=spiIn and netTopology(((payload*8)+7) downto (payload*8)) ; --(((payload*8)+7) downto (payload*8))
-					runStep_aux<='1';
-					
-				elsif instruction(1)='1' then -- confNetTopology
-					
-					netTopology(((payload*8)+7) downto (payload*8))<=spiIn;
-					--report "spiIn value = " & natural'image(to_integer(unsigned(spiIn))) & ", Neuron ID "& natural'image(ID) severity note;
-				elsif instruction(3)='1' then -- write
-					writeOp(((payload*8)+7) downto (payload*8))<=spiIn;
+				elsif byteCount=1 then
+					neuronBUS(7 downto 0)<=spiIn;
+				elsif byteCount=2 then
+					if instruction(3)='1' or instruction(4)='1' then -- read or write
+						itemIdBUS(15 downto 8)<=spiIn;
+					else
+						itemIdBUS(15 downto 8)<=x"00";
+					end if;
+				elsif byteCount=4 then
+					if instruction(3)='1' or instruction(4)='1' then -- read or write
+						itemIdBUS(7 downto 0)<=spiIn;
+					else -- no item id
+						itemIdBUS(7 downto 0)<=x"00";
+					end if;
 				
-				elsif instruction(4)='1' then -- read
-						readOp(((payload*8)+7) downto (payload*8))<=spiIn;
-						
-				else
-					-- generate error!
-				end if;
+					
+					
+					
+				if instruction(1)='1' and payload<=37 then -- confNetTopology
+					netTopology(payload*8+7 downto payload*8)<=spiIn;
+				
+				
+				elsif instruction(2)='1' and payload<=37 then -- runStep
+					spikeTrain(spkCounter*8+7 downto spkCounter*8)<=spiIn and netTopology(((payload*8)+7) downto (payload*8)) ; --(((payload*8)+7) downto (payload*8))
+					if spkCounter= 0 then
+						commandBUS(2 downto 0)<=(others =>'0');
+						commandBUS(3)<='1';  -- Update spike train
+						commandBUS(7 downto 4)<=(others =>'0');
+						spkCounter<=3;
+					else
+						spkCounter<=spkCounter-1;
+					end if
+					
+					
 				
 			elsif count>0 and payload_flag='1' and payload=0 then
 				if instruction(0)='1' then -- resetFPGA
