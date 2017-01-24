@@ -53,8 +53,8 @@ ARCHITECTURE mc_arch OF mc IS
 				commandBUS:	IN std_logic_vector(8 downto 0);		
 				neuronBUS: 	IN std_logic_vector(15 downto 0); 
 				itemIdBUS:	IN std_logic_vector(15 downto 0); 
-				valuesBUS: 	IN std_logic_vector (31 downto 0); -- N/M model
-				neuronOut: 	OUT std_logic -- N/M model
+				valueBUS: 	IN std_logic_vector (31 downto 0); -- N/M model
+				busy: 	OUT std_logic -- N/M model
 				neuronValue:OUT std_logic_vector (31 downto 0); -- N/M model
 			);
 	end component MM;
@@ -76,12 +76,13 @@ ARCHITECTURE mc_arch OF mc IS
 	signal netTopology		: std_logic_vector(MAX_NEURONS-1 downto 0) := (others => '0');
 
 	signal restoreState_aux	: std_logic :='0';
-	signal conf_flags			: std_logic_vector(5 downto 0) := (others => '0');
+	signal conf_flags			: std_logic_vector(MAX_NEURONS-1 downto 0) := (others => '0');
+	signal netTop_flags		: std_logic_vector(MAX_NEURONS-1 downto 0) := (others => '0');
 	signal runStep_aux		: std_logic :='0';
 	signal payload				: natural;
 	signal timestamp			: std_logic_vector(63 downto 0) := (others => '0');
 --	signal readBuffer			: std_logic_vector(39 downto 0) := (others => '0');
---	signal read_flag			: std_logic :='0';
+	signal read_flag			: std_logic :='0';
 	
 	signal queueProc			: integer :=0;
 	signal busy_flag			: std_logic := '0';
@@ -107,8 +108,8 @@ ARCHITECTURE mc_arch OF mc IS
 	signal commandBUS: 	std_logic_vector(7 downto 0); 
 	signal neuronBUS: 	std_logic_vector(15 downto 0); 
 	signal itemIdBUS:		std_logic_vector(15 downto 0); 
-	signal valuesBUS: 	std_logic_vector (31 downto 0); -- N/M model
-	signal neuronOut: 	std_logic_vector(NUM_MODELS-1 downto 0); -- N/M model
+	signal valueBUS: 		std_logic_vector (31 downto 0); -- N/M model
+	signal busy: 			std_logic_vector(NUM_MODELS-1 downto 0); -- N/M model
 	signal neuronValue:	std_logic_vector (31 downto 0);
 
 	
@@ -143,8 +144,8 @@ BEGIN
 			commandBUS=>commandBUS,
 			neuronBUS=>neuronBUS,
 			itemIdBUS=>itemIdBUS,
-			valuesBUS=>valuesBUS,
-			neuronOut=>neuronOut(I),
+			valueBUS=>valueBUS,
+			busy=>busy(I),
 			neuronValue=>neuronValue(I)
 		);
 	end generate;
@@ -157,45 +158,45 @@ BEGIN
 			reset=>reset
 		);
 	
---wrapper: process(clk, reset)--, read_flag, readBuffer)
---	begin
---	if clk'event and clk='1' then 
---		if reset='1' then
---			waddr<= (others => '0');
---			data<= (others => '0');
---			we <='0';
---			busy_flag<='<=(others =>'0');0';
---		else
---			if busy='1' and busy_flag='0' then
---				busy_flag<='1';
---			elsif busy='0' and busy_flag='1' then
---				data(31 downto 0)<=readBckBus(31 downto 0);
---				data(39 downto 32)<="100"&std_logic_vector(to_unsigned(ID,4))&'0';
---				we<='1';
---				busy_flag<='0';
---			else
---				-- nothing happens
---			end if;
---			
---			if we='1' then
---				if to_integer(unsigned(waddr))+5>509 then
---					waddr<=(others=>'0');
---				else
---					waddr<=waddr+5;
---				end if;
---				we<='0';
---			else
---				-- nothing happens
---			end if;
---		end if;
---		-- write to output ports
---		we<=we;
---		waddr<=waddr;
---		data<=data;
---	else
---		--nothing happens
---	end if;
---end process;
+wrapper: process(clk, reset)--, read_flag, readBuffer)
+	begin
+	if clk'event and clk='1' then 
+		if reset='1' then
+			waddr<= (others => '0');
+			data<= (others => '0');
+			we <='0';
+			busy_flag<='<=(others =>'0');0';
+		else
+			if busy='1' and busy_flag='0' then
+				busy_flag<='1';
+			elsif busy='0' and busy_flag='1' then
+				data(31 downto 0)<=readBckBus(31 downto 0);
+				data(39 downto 32)<="100"&std_logic_vector(to_unsigned(ID,4))&'0';
+				we<='1';
+				busy_flag<='0';
+			else
+				-- nothing happens
+			end if;
+			
+			if we='1' then
+				if to_integer(unsigned(waddr))+5>509 then
+					waddr<=(others=>'0');
+				else
+					waddr<=waddr+5;
+				end if;
+				we<='0';
+			else
+				-- nothing happens
+			end if;
+		end if;
+		-- write to output ports
+		we<=we;
+		waddr<=waddr;
+		data<=data;
+	else
+		--nothing happens
+	end if;
+end process;
 --
 --dispatcher: process(clk, reset, waddr)
 --	begin
@@ -262,7 +263,7 @@ spiController: process(clk, reset)
 			commandBUS<=(others => '0'); 
 			neuronBUS<=(others => '0'); 
 			itemIdBUS<=(others => '0');
-			valuesBUS<=(others => '0'
+			valueBUS<=(others => '0'
 			resetTri<='0';
 			instruction<=(others =>'0');
 			readOp<=(others =>'0');
@@ -271,6 +272,7 @@ spiController: process(clk, reset)
 			netTopology<=(others =>'0');
 			byteCount<=0;
 			spkCounter<=1;-- MSB -- > LSB - 9x 32bits + 1x 16bits
+			netTop_flags<=(other => '0');
 		else
 			
 			if spiInReady='1' and count=0 then
@@ -319,18 +321,6 @@ spiController: process(clk, reset)
 					neuronBUS(15 downto 8)<=spiIn;
 				elsif byteCount=1 then
 					neuronBUS(7 downto 0)<=spiIn;
-				elsif byteCount=2 then
-					if instruction(3)='1' or instruction(4)='1' then -- read or write
-						itemIdBUS(15 downto 8)<=spiIn;
-					else
-						itemIdBUS(15 downto 8)<=x"00";
-					end if;
-				elsif byteCount=4 then
-					if instruction(3)='1' or instruction(4)='1' then -- read or write
-						itemIdBUS(7 downto 0)<=spiIn;
-					else -- no item id
-						itemIdBUS(7 downto 0)<=x"00";
-					end if;
 				
 					
 					
@@ -342,13 +332,25 @@ spiController: process(clk, reset)
 				elsif instruction(2)='1' and payload<=37 then -- runStep
 					spikeTrain(spkCounter*8+7 downto spkCounter*8)<=spiIn and netTopology(((payload*8)+7) downto (payload*8)) ; --(((payload*8)+7) downto (payload*8))
 					if spkCounter= 0 then
-						commandBUS(2 downto 0)<=(others =>'0');
-						commandBUS(3)<='1';  -- Update spike train
-						commandBUS(7 downto 4)<=(others =>'0');
+						commandBUS<=x"08";
 						spkCounter<=3;
 					else
 						spkCounter<=spkCounter-1;
 					end if
+				
+				elsif (instruction(3)='1' or instruction(4)='1') and byteCount>1 then
+					if byteCount=2 then
+						itemIdBUS(15 downto 8)<=spiIn;
+					elsif byteCount=3 then
+						itemIdBUS(7 downto 0)<=spiIn;
+					elsif byteCount>3 then
+						valueBUS(payload*8+7 downto payload*8)<=spiIn;
+					else
+						--nothing happens
+					end if;
+				else
+					-- nothing happens
+				end if;
 					
 					
 				
@@ -358,15 +360,12 @@ spiController: process(clk, reset)
 						resetTri<='1';
 		
 				elsif instruction(1)='1' then -- confNetTopology
-						report "Net topology value = " & natural'image(to_integer(unsigned(netTopology))) & ", Neuron ID "& natural'image(ID) severity note;
-						neuronBUS<=(others => '0');
-						conf_flags(5)<='1';
+					netTop_flags(to_integer(unsigned(neuronBUS))-1)<='1';
 						
 				elsif instruction(2)='1' and queueProc<490 then -- runStep
-					if conf_flags(4)='1' and conf_flags(3)='1' and conf_flags(0)='1' and conf_flags(5)='1' then
-						commandBUS(0)<=x"01"; 
+					if conf_flags=netTop_flags and conf_flags>0 then
+						commandBUS<=x"01"; 
 						timestamp<=timestamp+1;
-						conf_flags(1)<='1';
 					else
 --						err_flag<='1';
 --						err<=x"03"; -- Error a run step can only be processed after configuring the simulation
@@ -375,13 +374,13 @@ spiController: process(clk, reset)
 						
 				elsif instruction(3)='1' then -- write
 					readdata_aux<='0';
-					restoreState_aux<='1';
-					itemid<=writeOp(47 downto 32);
+					commandBUS<=x"02"; 
+					conf_flags(to_integer(unsigned(neuronBUS))-1)<='1';
 					
 				elsif instruction(4)='1' then -- read TO DO: need to check
 						readdata_aux<='1';
-						restoreState_aux<='0';
-					
+						commandBUS<=x"02"; 
+						conf_flags(3)<='1';
 				else
 					-- last state
 				end if;
@@ -390,6 +389,13 @@ spiController: process(clk, reset)
 			else
 				-- TO DO
 			end if;
+			
+			if conf_flags(3)='1' then
+				conf_flags(3)<='0';
+			else
+				--nothing happens
+			end if;
+			
 			if resetTri='1' then
 				resetTri<='0';
 			else
@@ -403,15 +409,7 @@ spiController: process(clk, reset)
 			end if;
 
 		end if;
-		-- write to output ports
-		restoreState<=restoreState_aux;
-		resetTrigger<=resetTri;
-		readData<=readdata_aux;
-		runStep<=runStep_aux;
-		contBus(SPKWIDTH-1 downto 0)<= spikeTrain;
-		contBus(SPKWIDTH+ITEMID_SIZE-1 downto SPKWIDTH)<=itemid;
-		contBus(SPKWIDTH+CONTROLBUS+ITEMID_SIZE-1 downto SPKWIDTH+ITEMID_SIZE)<=writeOp(31 downto 0);
-		debug<=not(conf_flags(4))&not(conf_flags(3))&not(busy);
+
 	else
 		--nothing happens
 	end if;
