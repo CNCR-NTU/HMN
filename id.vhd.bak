@@ -1,0 +1,28 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+
+entity id is
+	generic (
+				muscles : natural := 5
+				);
+    port (
+			ID1	: OUT std_logic_vector (3 downto 0);
+			ID2	: OUT std_logic_vector (3 downto 0);
+			ID3	: OUT std_logic_vector (3 downto 0);
+			ID4	: OUT std_logic_vector (3 downto 0);
+			ID5	: OUT std_logic_vector (3 downto 0)
+    );
+end id;
+
+architecture id_arch of id is
+	
+begin
+	identifier : process () begin
+		ID1<="0001";
+		ID2<="0010";
+		ID3<="0011";
+		ID4<="0100";
+		ID5<="0101";
+	end process;
+
+end sequentiator_arch;

@@ -1,0 +1,109 @@
+LIBRARY ieee;
+USE ieee.std_logic_1164.ALL;
+USE ieee.numeric_std.ALL;
+use work.utility_package.all;
+use work.settings_package.all;
+  
+entity mc_tb is
+end;
+
+architecture behav_tb of mc_tb is
+ 
+component mc
+	generic 
+	(
+		DELAY			: natural;	-- delay in bits
+		CONTROLBUS 	: natural;	-- Control BUS width
+		CPOSITION	: natural;	-- Control BUS position
+		TXDELAY		: natural;	-- Tx delay
+		SIS 			: natural;	-- Synaptic inputs
+		READBACKBUS	: natural;	-- Readback BUS width
+		RPOSITION	: natural	-- Readback BUS position	
+	);
+
+port (
+	clk				: IN std_logic; -- 50 MHz clock
+	reset				: IN std_logic; -- sync reset
+	spiInReady		: IN std_logic; -- SPI
+	spiIn				: IN std_logic_vector (7 downto 0); -- SPI
+--	sbIn				: IN std_logic_vector (19 downto 0); -- Synaptic Boards Input
+	spiTX				: IN std_logic;
+	q					: IN std_logic_vector(7 downto 0);
+	readBckBus		: IN std_logic_vector ((READBACKBUS)-1 downto 0); -- N/M model
+	busy				: IN std_logic; -- N/M 
+	id					: IN std_logic_vector (3 downto 0);
+	spiOutReady		: OUT std_logic; -- SPI
+	spiOut			: OUT std_logic_vector (7 downto 0); -- SPI
+	resetTrigger	: OUT std_logic;
+	raddr				: OUT std_logic_vector(15 downto 0);
+	waddr				: OUT std_logic_vector(15 downto 0);
+	data				: OUT std_logic_vector(39 downto 0);
+	we					: OUT std_logic;
+	runStep			: OUT std_logic; -- N/M model
+	restoreState	: OUT std_logic; -- N/M model
+	readData			: OUT std_logic;
+	contBus			: OUT std_logic_vector ((CONTROLBUS+CPOSITION+SIS)-1 downto 0); -- N/M model
+	txReq				: OUT std_logic; -- SPI
+	debug				: OUT std_logic_vector (2 downto 0)
+	);
+end mc;
+
+end component neuron;
+	signal   clk    : std_logic := '0';
+	signal   reset  : std_logic := '0';
+	signal   runStep : std_logic := '0';
+	signal   spks  : std_logic_vector(NUM_NEURONS-1 downto 0);
+	signal   busy : std_logic_vector(NUM_NEURONS-1 downto 0);
+	signal   spike  : std_logic_vector(NUM_NEURONS-1 downto 0);
+	signal	voltage : integer_array (NUM_NEURONS-1 downto 0);
+	
+begin
+	neur: for I in 0 to NUM_NEURONS-1 generate
+		neuron_num: neuron
+		generic map ( 	NUM_NEURONS => NUM_NEURONS,
+							ID => ID(I),
+							LAYER=>LAYER(I),
+							NUM_SYN=>NUM_SYN,
+							NET_TOPOLOGY_NUM=>NET_TOPOLOGY_NUM(I),
+							VTH=>VTH(I),
+							REF_PERIOD=>REF_PERIOD(I),
+							NET_TOPOLOGY=>ROW(NET_TOPOLOGY,I,3),
+							WEIGHTS=>ROW(WEIGHTS,I,3)
+						)
+		port map (
+			clk   => clk,
+			reset => reset,
+			runStep => runStep,
+			spks => spks,
+			busy => busy(I),
+			spike => spike(I),
+			voltage => voltage(I)
+		);
+	end generate;
+		
+	clock : process
+		begin
+		wait for 1 ns; clk  <= not clk;
+   end process clock;
+ 
+   stimulus : process
+   begin
+		runStep<='0';
+		spks<="01010";
+		wait for 5 ns; reset  <= '1';
+		wait for 4 ns; reset  <= '0';
+		for I in 0 to 100 loop
+			wait for 16 ns; runStep<='1'; spks<=not spks;
+			wait for 2 ns; runStep<='0';
+		end loop;
+		wait;
+   end process stimulus;
+ 
+   monitor : process (clk)
+   begin
+     if (clk = '1' and clk'event) then
+			--report "ID = " & natural'image(ID(0)) & ", LAYER = "& natural'image(LAYER(0)) severity note;
+     end if;
+    end process monitor;
+  
+ end behav_tb;

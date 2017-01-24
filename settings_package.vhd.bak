@@ -1,0 +1,16 @@
+library ieee;
+use ieee.std_logic_1164.all;
+
+
+package settings_package is
+	constant DELAY:		natural	:=8;
+	constant CONTROLBUS:	natural 	:=32;
+	constant CPOSITION:	natural 	:=32;
+	constant TXDELAY:		natural 	:=869;
+	constant SIS: 			natural 	:= 304;	
+	constant READBACKBUS:natural	:= 32;
+	constant RPOSITION:	natural 	:= 32;
+end settings_package;
+
+package body settings_package is
+end settings_package;

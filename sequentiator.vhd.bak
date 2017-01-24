@@ -1,0 +1,97 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+
+entity sequentiator is
+	generic (
+				muscles : natural := 16
+				);
+    port (
+			clk 				: in  STD_LOGIC;
+			clock_115_2KHz	: IN STD_LOGIC;
+			reset  			: in  STD_LOGIC;
+			runStep			: in  std_logic_vector (muscles-1 downto 0);
+			spiBusy			: IN std_logic_vector (muscles-1 downto 0); -- SPI
+			spiInReady		: IN std_logic_vector (muscles-1 downto 0); -- SPI
+			spiIn				: IN std_logic_vector ((muscles*8)-1 downto 0); -- SPI
+			spiTX				: out std_logic_vector (15 downto 0);
+			spiOutReady		: OUT std_logic; -- SPI
+			spiOut			: OUT std_logic_vector (7 downto 0); -- SPI
+			clk_out			: out STD_LOGIC -- 115.2 kHz
+    );
+end sequentiator
+
+architecture sequentiator_arch of sequentiator is
+	signal runstep_aux 	: std_logic_vector (muscles-1 downto 0)	:=(others =>'0');
+	signal count		 	: natural range 0 to muscles	:=0;
+	signal buf				: std_logic_vector (7 downto 0):=(others =>'0');
+	signal seq_flag		: std_logic_vector (muscles-1	:=(others =>'0');
+	signal bytesCounter	: natural range 0 to 4	:=0;
+	signal delayCounter	: natural range 0 to 2000 :=0;
+	signal tx_flag			: std_logic :='0';
+	signal spiOutReady_aux: std_logic :='0';
+	signal spiTX_aux: std_logic :='0';
+begin
+		sequentiator : process (clk, reset, spiBusy, spiOutReady_aux)
+		if rising_edge(clk) then
+			if reset='1' then
+				runstep_aux<=(others => '0');
+				buf<=(others => '0');
+				count<=0;
+				spiTX<=(others =>'0');
+				seq_flag<=(others =>'0');
+				tx_flag<='0';
+				bytesCounter<=0;
+				delayCounter<=0;
+				spiTX_aux<='0';
+			else
+				
+				runstep_aux<=runstep_aux or runStep;
+				
+				if runstep_aux=x"FFFF" and count<muscles then	
+					if spiOutReady_aux='0' and spiBusy='0' and spiTX_aux='0' then
+						if seq_flag(count)='0' then
+							spiTX_aux(count)<='1';
+							seq_flag(count)<='1';
+						else
+							spiTX_aux(count)<='0';
+							seq_flag(count)<='0';
+							-- nothing happens
+						end if;
+					else
+						-- nothing happens
+					end if;
+					
+					if tx_flag='1' and delayCounter=0 then
+						tx_flag<='0';
+					elsif delayCounter>0
+						delayCounter<=delayCounter-1;
+					else
+						-- nothing happens
+					end if;
+					
+					if spiInReady(count)='1' then
+						if bytesCounter<4 then
+							bytesCounter<=bytesCounter+1;
+						else
+							count<=count+1;
+							bytesCounter<=0;
+						end if;
+						buff<=spiIn((count*8)+7 downto (count*8));
+						tx_flag<='1';
+						delayCounter<=2000;
+					else
+						-- nothing happens
+					end if;
+				elsif count=muscles then
+					runstep_aux<=(others => '0');
+					seq_flag<=(others =>'0');
+					count<=0;
+				else
+					-- nothing happens
+			end if;
+		
+		
+
+		
+		
+end sequentiator_arch;
