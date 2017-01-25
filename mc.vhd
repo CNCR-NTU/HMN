@@ -50,12 +50,12 @@ ARCHITECTURE mc_arch OF mc IS
 		port (
 				clk: 			IN std_logic; -- 100 MHz clock
 				reset: 		IN std_logic; -- sync clock
-				commandBUS:	IN std_logic_vector(8 downto 0);		
+				commandBUS:	IN std_logic_vector(7 downto 0);		
 				neuronBUS: 	IN std_logic_vector(15 downto 0); 
 				itemIdBUS:	IN std_logic_vector(15 downto 0); 
 				valueBUS: 	IN std_logic_vector (31 downto 0); -- N/M model
-				busy: 	OUT std_logic -- N/M model
-				neuronValue:OUT std_logic_vector (31 downto 0); -- N/M model
+				busy: 	OUT std_logic; -- N/M model
+				neuronValue:OUT std_logic_vector (31 downto 0) -- N/M model
 			);
 	end component MM;
 	component resetTrig
@@ -66,6 +66,7 @@ ARCHITECTURE mc_arch OF mc IS
 				reset					: OUT STD_LOGIC
 				);		
 	end component resetTrig;
+	type matrix_t	is array(NUM_MODELS-1 downto 0) of std_logic_vector (31 downto 0);
 	signal instruction 		: std_logic_vector(7 downto 0) := (others => '0');
 	signal byteCount			: natural range 0 to 3;
 	
@@ -110,7 +111,7 @@ ARCHITECTURE mc_arch OF mc IS
 	signal itemIdBUS:		std_logic_vector(15 downto 0); 
 	signal valueBUS: 		std_logic_vector (31 downto 0); -- N/M model
 	signal busy: 			std_logic_vector(NUM_MODELS-1 downto 0); -- N/M model
-	signal neuronValue:	std_logic_vector (31 downto 0);
+	signal neuronValue:	matrix_t;
 
 	
 	-- reset trigger
@@ -158,45 +159,45 @@ BEGIN
 			reset=>reset
 		);
 	
-wrapper: process(clk, reset)--, read_flag, readBuffer)
-	begin
-	if clk'event and clk='1' then 
-		if reset='1' then
-			waddr<= (others => '0');
-			data<= (others => '0');
-			we <='0';
-			busy_flag<='<=(others =>'0');0';
-		else
-			if busy='1' and busy_flag='0' then
-				busy_flag<='1';
-			elsif busy='0' and busy_flag='1' then
-				data(31 downto 0)<=readBckBus(31 downto 0);
-				data(39 downto 32)<="100"&std_logic_vector(to_unsigned(ID,4))&'0';
-				we<='1';
-				busy_flag<='0';
-			else
-				-- nothing happens
-			end if;
-			
-			if we='1' then
-				if to_integer(unsigned(waddr))+5>509 then
-					waddr<=(others=>'0');
-				else
-					waddr<=waddr+5;
-				end if;
-				we<='0';
-			else
-				-- nothing happens
-			end if;
-		end if;
-		-- write to output ports
-		we<=we;
-		waddr<=waddr;
-		data<=data;
-	else
-		--nothing happens
-	end if;
-end process;
+--wrapper: process(clk, reset)--, read_flag, readBuffer)
+--	begin
+--	if clk'event and clk='1' then 
+--		if reset='1' then
+--			waddr<= (others => '0');
+--			data<= (others => '0');
+--			we <='0';
+--			busy_flag<='<=(others =>'0');0';
+--		else
+--			if busy='1' and busy_flag='0' then
+--				busy_flag<='1';
+--			elsif busy='0' and busy_flag='1' then
+--				data(31 downto 0)<=readBckBus(31 downto 0);
+--				data(39 downto 32)<="100"&std_logic_vector(to_unsigned(ID,4))&'0';
+--				we<='1';
+--				busy_flag<='0';
+--			else
+--				-- nothing happens
+--			end if;
+--			
+--			if we='1' then
+--				if to_integer(unsigned(waddr))+5>509 then
+--					waddr<=(others=>'0');
+--				else
+--					waddr<=waddr+5;
+--				end if;
+--				we<='0';
+--			else
+--				-- nothing happens
+--			end if;
+--		end if;
+--		-- write to output ports
+--		we<=we;
+--		waddr<=waddr;
+--		data<=data;
+--	else
+--		--nothing happens
+--	end if;
+--end process;
 --
 --dispatcher: process(clk, reset, waddr)
 --	begin
@@ -263,7 +264,7 @@ spiController: process(clk, reset)
 			commandBUS<=(others => '0'); 
 			neuronBUS<=(others => '0'); 
 			itemIdBUS<=(others => '0');
-			valueBUS<=(others => '0'
+			valueBUS<=(others => '0');
 			resetTri<='0';
 			instruction<=(others =>'0');
 			readOp<=(others =>'0');
@@ -272,7 +273,7 @@ spiController: process(clk, reset)
 			netTopology<=(others =>'0');
 			byteCount<=0;
 			spkCounter<=1;-- MSB -- > LSB - 9x 32bits + 1x 16bits
-			netTop_flags<=(other => '0');
+			netTop_flags<=(others => '0');
 		else
 			
 			if spiInReady='1' and count=0 then
@@ -321,7 +322,9 @@ spiController: process(clk, reset)
 					neuronBUS(15 downto 8)<=spiIn;
 				elsif byteCount=1 then
 					neuronBUS(7 downto 0)<=spiIn;
-				
+				else
+					--nothing happens
+				end if;
 					
 					
 					
@@ -336,7 +339,7 @@ spiController: process(clk, reset)
 						spkCounter<=3;
 					else
 						spkCounter<=spkCounter-1;
-					end if
+					end if;
 				
 				elsif (instruction(3)='1' or instruction(4)='1') and byteCount>1 then
 					if byteCount=2 then

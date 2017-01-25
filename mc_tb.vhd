@@ -66,14 +66,9 @@ begin
  
    stimulus : process
    begin
-		runStep<=(others =>'0');
 		spiInReady<='0';
 		spiIn	<= (others =>'0');
 		spiTX<=(others =>'0');
-		for i in readBckBus'range loop
-			readBckBus(i)<=(others => '0');
-		end loop;
-		busy<=(others=>'0'); 
 		wait for 5 ns; reset  <= '1';
 		wait for 4 ns; reset  <= '0';
 		-- test reset

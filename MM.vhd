@@ -10,25 +10,25 @@ use ieee.float_pkg.all;
 
 entity MM is
 
-generic 
-	(
-		ID				: natural;	-- model ID
-		MAX_NEURONS	: natural;	-- maximum number of neurons
-		SPKWIDTH		: natural;	-- spikes BUS width
-		CONTROLBUS 	: natural;	-- Control BUS width
-		ITEMID_SIZE	: natural;	-- Control BU
-		READBACKBUS	: natural	-- Readback BUS width
-	);		
-
-port (	clk		: IN std_logic; -- 100 MHz clock
-	reset		: IN std_logic; -- sync clock
-	runStep		: IN std_logic; -- N/M model
-	restoreState	: IN std_logic; -- N/M model
-	readData:		IN std_logic;
-	contBus		: IN std_logic_vector ((CONTROLBUS+ITEMID_SIZE+SPKWIDTH)-1 downto 0);; -- N/M model
-	readBckBus	: OUT std_logic_vector (READBACKBUS-1 downto 0); -- N/M model
-	busy		: OUT std_logic -- N/M model
-	);
+	generic 
+		(
+			ID				: natural;	-- model ID
+			MAX_NEURONS : natural;  -- maximum number of neurons
+			SPKWIDTH		: natural;	-- spikes BUS width
+			CONTROLBUS 	: natural;	-- Control BUS width
+			ITEMID_SIZE	: natural;	-- Control BU
+			READBACKBUS	: natural	-- Readback BUS width
+		);		
+	port (
+			clk: 			IN std_logic; -- 100 MHz clock
+			reset: 		IN std_logic; -- sync clock
+			commandBUS:	IN std_logic_vector(7 downto 0);		
+			neuronBUS: 	IN std_logic_vector(15 downto 0); 
+			itemIdBUS:	IN std_logic_vector(15 downto 0); 
+			valueBUS: 	IN std_logic_vector (31 downto 0); -- N/M model
+			busy: 	OUT std_logic; -- N/M model
+			neuronValue:OUT std_logic_vector (31 downto 0) -- N/M model
+		);
 end MM;
 
 architecture MM_arch of MM is
