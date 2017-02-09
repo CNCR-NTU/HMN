@@ -7,16 +7,23 @@
 ----------------------------------------------------------------------------------------
 library ieee;
 use ieee.std_logic_1164.all;
+use ieee.fixed_float_types.all;
+--!ieee_proposed for fixed point
+use ieee.fixed_pkg.all;
+--!ieee_proposed for floating point
+use ieee.float_pkg.all;
 
 package utility_package is
-	 constant BUSW: natural :=32;
     type integer_array is array (natural range <>) of integer;
 	 type natural_array is array (natural range <>) of natural;
     type integer_matrix is array (natural range <>, natural range <>) of integer;
-	 type std_logic_array is array (natural range <>) of std_logic;
-	 type std_logic_matrix is array (natural range <>, natural range <>) of std_logic;
+	 type float_array is array (natural range <>) of float32;
+	 type float_matrix is array (natural range <>, natural range <>) of float32;
+
+    type std_logic_matrix is array (natural range <>, natural range <>) of std_logic;
     
-    function MEM_POTENTIAL(input : integer) return integer;
+	 function CONDUCTANCE (dt : in natural) return float32;
+	 function MEM_POTENTIAL(input : integer) return integer;
 	 function LOG2FLOOR(input : integer) return integer;
     function LOG2CEIL(input : integer) return integer;
 
@@ -38,11 +45,29 @@ package utility_package is
 
     function REVERSE(arg : std_logic_vector) return std_logic_vector;
     function REVERSE(arg : bit_vector) return bit_vector;
-	 
-	 function ROW(input: integer_matrix; index: natural; c: natural) return integer_array;
+	  function ROW(input: integer_matrix; index: natural; c: natural) return integer_array;
 end utility_package;
 
 package body utility_package is
+	function CONDUCTANCE (dt : in natural) return float32 is
+		variable	g_syn : float32 := (others =>'0');
+	begin
+		case dt is	 
+			when 0=> g_syn := to_float(1.0,g_syn);
+			when 1=> g_syn := to_float(2.8396562499e-26,g_syn);
+			when 2=> g_syn := to_float(8.06364761761e-52,g_syn);
+			when 3=> g_syn := to_float(2.28979873544e-77,g_syn);
+			when 4=> g_syn := to_float(6.5022412901e-103,g_syn);
+			when 5=> g_syn := to_float(1.84641301178e-128,g_syn);
+			when 6=> g_syn := to_float(5.2431782488e-154,g_syn);
+			when 7=> g_syn := to_float(1.48888238836e-179,g_syn);
+			when 8=> g_syn := to_float(4.22791417946e-205,g_syn);
+			when 9=> g_syn := to_float(1.20058229238e-230,g_syn);
+			when others=> g_syn := to_float(0.0,g_syn);
+		end case;
+		return g_syn;
+	end CONDUCTANCE;
+	
    function MEM_POTENTIAL(input : integer) return integer is
 		variable result : integer;
 	begin
@@ -170,9 +195,9 @@ package body utility_package is
     end PROJECTION;
     
     function PROJECTION(arg : std_logic_matrix; index : integer) return std_logic_vector is
-        variable res : std_logic_vector(arg'range);
+        variable res : std_logic_vector(arg'range(2));
     begin
-        for i in arg'range loop
+        for i in arg'range(2) loop
             res(i) := arg(index, i);
         end loop;
         return res;
@@ -231,7 +256,7 @@ package body utility_package is
         end loop;
         return res;
     end REVERSE;
-	 
+
     function REVERSE(arg : bit_vector) return bit_vector is
         variable res : bit_vector(arg'range);
     begin
@@ -249,5 +274,5 @@ package body utility_package is
 			end loop;
 			return res;
 		end ROW;
-		
+
 end utility_package;
